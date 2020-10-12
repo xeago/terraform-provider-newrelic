@@ -3,12 +3,20 @@ package newrelic
 import (
 	"fmt"
 	"log"
-	"sort"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 
 	"github.com/newrelic/newrelic-client-go/pkg/dashboards"
 )
+
+// migrateStateV0toV1 currently facilitates migrating the `widgets`
+// attribute from TypeSet to TypeList. Since the underlying
+// data structure is []map[string]interface{} for both, we don't
+// need to do anything other than return the state and Terraform
+// will update the state to utilize TypeList.
+func migrateStateV0toV1(rawState map[string]interface{}, meta interface{}) (map[string]interface{}, error) {
+	return rawState, nil
+}
 
 // Assemble the *dashboards.Dashboard struct.
 // Used by the newrelic_dashboard Create and Update functions.
@@ -324,9 +332,9 @@ func flattenDashboard(dashboard *dashboards.Dashboard, d *schema.ResourceData) e
 	// IMPORTANT! Sorting the widgets before storing in state helps prevent drift
 	// in multiple scenarios, such as when/if the API returns widgets in a different
 	// order or if the user changes the order the HCL resource configuration.
-	sort.SliceStable(dashboard.Widgets, func(i, j int) bool {
-		return dashboard.Widgets[i].ID < dashboard.Widgets[j].ID
-	})
+	// sort.SliceStable(dashboard.Widgets, func(i, j int) bool {
+	// 	return dashboard.Widgets[i].ID < dashboard.Widgets[j].ID
+	// })
 
 	if dashboard.Widgets != nil && len(dashboard.Widgets) > 0 {
 		if widgetErr := d.Set("widget", flattenWidgets(&dashboard.Widgets, d)); widgetErr != nil {

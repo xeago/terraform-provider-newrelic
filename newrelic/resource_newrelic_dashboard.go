@@ -160,6 +160,88 @@ func resourceNewRelicDashboard() *schema.Resource {
 				Elem:        widgetSchemaElem(),
 			},
 		},
+		SchemaVersion: 1,
+		StateUpgraders: []schema.StateUpgrader{
+			{
+				Type:    resourceInstanceV0().CoreConfigSchema().ImpliedType(),
+				Upgrade: migrateStateV0toV1,
+				Version: 0,
+			},
+		},
+	}
+}
+
+func resourceInstanceV0() *schema.Resource {
+	return &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"widget": {
+				Type:        schema.TypeSet,
+				Optional:    true,
+				MaxItems:    300,
+				Description: "A nested block that describes a visualization. Up to 300 widget blocks are allowed in a dashboard definition.",
+				Elem:        widgetSchemaElem(),
+			},
+			"title": {
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "The title of the dashboard.",
+			},
+			"icon": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				Default:      "bar-chart",
+				ValidateFunc: validation.StringInSlice(validIconValues, false),
+				Description:  "The icon for the dashboard.",
+			},
+			"visibility": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				Default:      "all",
+				ValidateFunc: validation.StringInSlice([]string{"owner", "all"}, false),
+				Description:  "Determines who can see the dashboard in an account. Valid values are all or owner. Defaults to all.",
+			},
+			"dashboard_url": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "The URL for viewing the dashboard.",
+			},
+			"editable": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				Default:      "editable_by_all",
+				ValidateFunc: validation.StringInSlice([]string{"read_only", "editable_by_owner", "editable_by_all", "all"}, false),
+				Description:  "Determines who can edit the dashboard in an account. Valid values are all, editable_by_all, editable_by_owner, or read_only. Defaults to editable_by_all.",
+			},
+			"grid_column_count": {
+				Type:         schema.TypeInt,
+				Optional:     true,
+				Default:      3,
+				ValidateFunc: validation.IntInSlice([]int{3, 12}),
+				Description:  "New Relic One supports a 3 column grid or a 12 column grid. New Relic Insights supports a 3 column grid.",
+			},
+			"filter": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				MaxItems:    1,
+				Description: "A nested block that describes a dashboard filter. Exactly one nested filter block is allowed.",
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"event_types": {
+							Type:     schema.TypeSet,
+							Elem:     &schema.Schema{Type: schema.TypeString},
+							Required: true,
+							Set:      schema.HashString,
+						},
+						"attributes": {
+							Type:     schema.TypeSet,
+							Elem:     &schema.Schema{Type: schema.TypeString},
+							Optional: true,
+							Set:      schema.HashString,
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
