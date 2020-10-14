@@ -3,7 +3,6 @@ package newrelic
 import (
 	"fmt"
 	"log"
-	"sort"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 
@@ -58,7 +57,7 @@ func expandFilter(filter map[string]interface{}) dashboards.DashboardFilter {
 }
 
 func expandWidgets(in interface{}) ([]dashboards.DashboardWidget, error) {
-	widgetsIn := in.([]interface{})
+	widgetsIn := in.(*schema.Set).List()
 	if len(widgetsIn) < 1 {
 		return []dashboards.DashboardWidget{}, nil
 	}
@@ -324,9 +323,9 @@ func flattenDashboard(dashboard *dashboards.Dashboard, d *schema.ResourceData) e
 	// IMPORTANT! Sorting the widgets before storing in state helps prevent drift
 	// in multiple scenarios, such as when/if the API returns widgets in a different
 	// order or if the user changes the order the HCL resource configuration.
-	sort.SliceStable(dashboard.Widgets, func(i, j int) bool {
-		return dashboard.Widgets[i].ID < dashboard.Widgets[j].ID
-	})
+	// sort.SliceStable(dashboard.Widgets, func(i, j int) bool {
+	// 	return dashboard.Widgets[i].ID < dashboard.Widgets[j].ID
+	// })
 
 	if dashboard.Widgets != nil && len(dashboard.Widgets) > 0 {
 		if widgetErr := d.Set("widget", flattenWidgets(&dashboard.Widgets, d)); widgetErr != nil {
@@ -351,20 +350,22 @@ func isValidViz(viz dashboards.VisualizationType) bool {
 func flattenWidgets(widgetsIn *[]dashboards.DashboardWidget, d *schema.ResourceData) []map[string]interface{} {
 	var out = make([]map[string]interface{}, len(*widgetsIn))
 
-	widgetCfg, ok := d.GetOk("widget")
+	widgetCfg, _ := d.GetOk("widget")
+	wCfg := widgetCfg.(*schema.Set).List()
 
 	for i, w := range *widgetsIn {
-		if !ok {
-			// If not widgets are configured, we need
-			// to provide an empty map to populate
-			// using the incoming API response widget data.
-			wgt := map[string]interface{}{}
-			out[i] = flattenWidget(w, wgt)
-		} else {
-			widgetConfig := widgetCfg.([]interface{})
-			wgt := widgetConfig[i].(map[string]interface{})
-			out[i] = flattenWidget(w, wgt)
-		}
+		wgt := wCfg[i].(map[string]interface{})
+		out[i] = flattenWidget(w, wgt)
+		// if !ok {
+		// 	// If not widgets are configured, we need
+		// 	// to provide an empty map to populate
+		// 	// using the incoming API response widget data.
+		// 	wgt := map[string]interface{}{}
+		// 	out[i] = flattenWidget(w, wgt)
+		// } else {
+		// 	wgt := wCfg[i].(map[string]interface{})
+		// 	out[i] = flattenWidget(w, wgt)
+		// }
 	}
 
 	return out
