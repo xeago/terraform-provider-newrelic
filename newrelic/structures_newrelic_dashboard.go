@@ -84,6 +84,10 @@ func expandWidget(cfg map[string]interface{}) (*dashboards.DashboardWidget, erro
 		ID:            cfg["widget_id"].(int),
 	}
 
+	if accountID, ok := cfg["account_id"]; ok {
+		widget.AccountID = accountID.(int)
+	}
+
 	err := validateWidgetData(cfg)
 	if err != nil {
 		return nil, err
@@ -317,7 +321,7 @@ func flattenDashboard(dashboard *dashboards.Dashboard, d *schema.ResourceData) e
 	}
 
 	if dashboard.Widgets != nil && len(dashboard.Widgets) > 0 {
-		if widgetErr := d.Set("widget", flattenWidgets(&dashboard.Widgets)); widgetErr != nil {
+		if widgetErr := d.Set("widget", flattenWidgets(&dashboard.Widgets, d)); widgetErr != nil {
 			return widgetErr
 		}
 	}
@@ -327,80 +331,96 @@ func flattenDashboard(dashboard *dashboards.Dashboard, d *schema.ResourceData) e
 
 // TODO: Reduce the cyclomatic complexity of this func
 // nolint:gocyclo
-func flattenWidgets(in *[]dashboards.DashboardWidget) []map[string]interface{} {
+func flattenWidgets(in *[]dashboards.DashboardWidget, d *schema.ResourceData) []map[string]interface{} {
 	var out = make([]map[string]interface{}, len(*in))
+
+	// wgts := d.Get("widget")
+	// configuredWidgets := wgts.(*schema.Set).List()
+
 	for i, w := range *in {
 		m := make(map[string]interface{})
+
 		m["widget_id"] = w.ID
-		m["visualization"] = w.Visualization
-		m["title"] = w.Presentation.Title
-		m["notes"] = w.Presentation.Notes
-		m["row"] = w.Layout.Row
-		m["column"] = w.Layout.Column
-		m["width"] = w.Layout.Width
-		m["height"] = w.Layout.Height
 
-		if w.Presentation.DrilldownDashboardID > 0 {
-			m["drilldown_dashboard_id"] = w.Presentation.DrilldownDashboardID
-		}
+		// The REST API returns cross-account widgets
+		// as "inaccessible" so we can't really do anything
+		// with that. An inaccessible widget does not
+		// contain enough data in the response to bother setting
+		// it in the state. As a consequence, if customers want to
+		// use cross-account widgets, they will need to either
+		// ignore the lifecycle changes for `widget` block or
+		// use `-auto-approve` when running `terraform apply`.
+		if w.Visualization != "inaccessible" {
+			m["visualization"] = w.Visualization
+			m["title"] = w.Presentation.Title
+			m["notes"] = w.Presentation.Notes
+			m["row"] = w.Layout.Row
+			m["column"] = w.Layout.Column
+			m["width"] = w.Layout.Width
+			m["height"] = w.Layout.Height
 
-		if w.Presentation.Threshold != nil {
-			threshold := w.Presentation.Threshold
-
-			if threshold.Red > 0 {
-				m["threshold_red"] = threshold.Red
+			if w.Presentation.DrilldownDashboardID > 0 {
+				m["drilldown_dashboard_id"] = w.Presentation.DrilldownDashboardID
 			}
 
-			if threshold.Yellow > 0 {
-				m["threshold_yellow"] = threshold.Yellow
-			}
-		}
+			if w.Presentation.Threshold != nil {
+				threshold := w.Presentation.Threshold
 
-		if w.Data != nil && len(w.Data) > 0 {
-			data := w.Data[0]
+				if threshold.Red > 0 {
+					m["threshold_red"] = threshold.Red
+				}
 
-			if data.NRQL != "" {
-				m["nrql"] = data.NRQL
-			}
-
-			if data.Source != "" {
-				m["source"] = data.Source
+				if threshold.Yellow > 0 {
+					m["threshold_yellow"] = threshold.Yellow
+				}
 			}
 
-			if data.Duration > 0 {
-				m["duration"] = data.Duration
-			}
+			if w.Data != nil && len(w.Data) > 0 {
+				data := w.Data[0]
 
-			if data.EndTime > 0 {
-				m["end_time"] = data.EndTime
-			}
+				if data.NRQL != "" {
+					m["nrql"] = data.NRQL
+				}
 
-			if data.RawMetricName != "" {
-				m["raw_metric_name"] = data.RawMetricName
-			}
+				if data.Source != "" {
+					m["source"] = data.Source
+				}
 
-			if data.Facet != "" {
-				m["facet"] = data.Facet
-			}
+				if data.Duration > 0 {
+					m["duration"] = data.Duration
+				}
 
-			if data.OrderBy != "" {
-				m["order_by"] = data.OrderBy
-			}
+				if data.EndTime > 0 {
+					m["end_time"] = data.EndTime
+				}
 
-			if data.Limit > 0 {
-				m["limit"] = data.Limit
-			}
+				if data.RawMetricName != "" {
+					m["raw_metric_name"] = data.RawMetricName
+				}
 
-			if data.EntityIds != nil && len(data.EntityIds) > 0 {
-				m["entity_ids"] = data.EntityIds
-			}
+				if data.Facet != "" {
+					m["facet"] = data.Facet
+				}
 
-			if data.CompareWith != nil && len(data.CompareWith) > 0 {
-				m["compare_with"] = flattenWidgetDataCompareWith(data.CompareWith)
-			}
+				if data.OrderBy != "" {
+					m["order_by"] = data.OrderBy
+				}
 
-			if data.Metrics != nil && len(data.Metrics) > 0 {
-				m["metric"] = flattenWidgetDataMetrics(data.Metrics)
+				if data.Limit > 0 {
+					m["limit"] = data.Limit
+				}
+
+				if data.EntityIds != nil && len(data.EntityIds) > 0 {
+					m["entity_ids"] = data.EntityIds
+				}
+
+				if data.CompareWith != nil && len(data.CompareWith) > 0 {
+					m["compare_with"] = flattenWidgetDataCompareWith(data.CompareWith)
+				}
+
+				if data.Metrics != nil && len(data.Metrics) > 0 {
+					m["metric"] = flattenWidgetDataMetrics(data.Metrics)
+				}
 			}
 		}
 

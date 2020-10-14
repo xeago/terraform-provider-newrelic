@@ -159,6 +159,11 @@ func resourceNewRelicDashboard() *schema.Resource {
 				Description: "A nested block that describes a visualization. Up to 300 widget blocks are allowed in a dashboard definition.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
+						"account_id": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "The target account ID to fetch data from, if not the current account.",
+						},
 						"widget_id": {
 							Type:        schema.TypeInt,
 							Computed:    true,
