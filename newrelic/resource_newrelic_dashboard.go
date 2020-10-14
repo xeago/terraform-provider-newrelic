@@ -153,7 +153,7 @@ func resourceNewRelicDashboard() *schema.Resource {
 				},
 			},
 			"widget": {
-				Type:        schema.TypeList,
+				Type:        schema.TypeSet,
 				Optional:    true,
 				MaxItems:    300,
 				Description: "A nested block that describes a visualization. Up to 300 widget blocks are allowed in a dashboard definition.",

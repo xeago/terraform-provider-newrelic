@@ -3,6 +3,7 @@ package newrelic
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 
@@ -15,6 +16,21 @@ import (
 // need to do anything other than return the state and Terraform
 // will update the state to utilize TypeList.
 func migrateStateV0toV1(rawState map[string]interface{}, meta interface{}) (map[string]interface{}, error) {
+	widgetsRaw, ok := rawState["widget"]
+	if !ok {
+		log.Printf("[INFO] No widgets to migrate")
+		return rawState, nil
+	}
+
+	widgetss := widgetsRaw.([]interface{})
+
+	retypedWidgets := []map[string]interface{}{}
+	for _, w := range widgetss {
+		retypedWidgets = append(retypedWidgets, w.(map[string]interface{}))
+	}
+
+	rawState["widget"] = retypedWidgets
+
 	return rawState, nil
 }
 
@@ -66,7 +82,7 @@ func expandFilter(filter map[string]interface{}) dashboards.DashboardFilter {
 }
 
 func expandWidgets(in interface{}) ([]dashboards.DashboardWidget, error) {
-	widgetsIn := in.([]interface{})
+	widgetsIn := in.(*schema.Set).List()
 	if len(widgetsIn) < 1 {
 		return []dashboards.DashboardWidget{}, nil
 	}
@@ -337,9 +353,35 @@ func flattenDashboard(dashboard *dashboards.Dashboard, d *schema.ResourceData) e
 	// })
 
 	if dashboard.Widgets != nil && len(dashboard.Widgets) > 0 {
-		if widgetErr := d.Set("widget", flattenWidgets(&dashboard.Widgets, d)); widgetErr != nil {
-			return widgetErr
+		// if widgetErr := d.Set("widget", flattenWidgets(&dashboard.Widgets, d)); widgetErr != nil {
+		// 	return widgetErr
+		// }
+
+		d.MarkNewResource()
+
+		currentState := d.State()
+
+		wigets := d.Get("widget")
+
+		wgtz := wigets.(*schema.Set).List()
+
+		log.Print("\n\n **************************** \n")
+
+		for _, w := range wgtz {
+			// key := fmt.Sprintf("widget.%d", i)
+
+			// widget := currentState.Attributes[key]
+
+			wgt := w.(map[string]interface{})
+
+			log.Printf("\n currentState - widget:  %+v \n", currentState.Attributes)
+			log.Printf("\n currentState - widget:  %+v \n", wgt["widget_id"])
 		}
+
+		log.Print("\n **************************** \n\n")
+		time.Sleep(7 * time.Second)
+
+		flattenWidgets(&dashboard.Widgets, d)
 	}
 
 	return nil
@@ -356,22 +398,107 @@ func isValidViz(viz dashboards.VisualizationType) bool {
 	return false
 }
 
+func findWidget(widgetID int, widgetsIn []dashboards.DashboardWidget) *dashboards.DashboardWidget {
+	for _, w := range widgetsIn {
+		if w.ID == widgetID {
+			return &w
+		}
+	}
+
+	return nil
+}
+
+func findWidgetConfig(widgetID int, widgetsIn []dashboards.DashboardWidget) *dashboards.DashboardWidget {
+	for _, w := range widgetsIn {
+		if w.ID == widgetID {
+			return &w
+		}
+	}
+
+	return nil
+}
+
+func findConfiguredWidget(widgetID int, configuredWidgets []interface{}) (*map[string]interface{}, int) {
+	// configuredWidgetz := configuredWidgets.([]map[string]interface{})
+
+	for i, w := range configuredWidgets {
+		widgetObject := w.(map[string]interface{})
+		wID := widgetObject["widget_id"].(int)
+
+		if wID == widgetID {
+			return &widgetObject, i
+		}
+	}
+
+	return nil, 0
+}
+
 func flattenWidgets(widgetsIn *[]dashboards.DashboardWidget, d *schema.ResourceData) []map[string]interface{} {
-	var out = make([]map[string]interface{}, len(*widgetsIn))
+	out := []map[string]interface{}{}
 
-	widgetCfg, ok := d.GetOk("widget")
+	// out := make([]map[string]interface{}, len(*widgetsIn))
 
-	for i, w := range *widgetsIn {
-		if !ok {
-			// If not widgets are configured, we need
-			// to provide an empty map to populate
-			// using the incoming API response widget data.
-			wgt := map[string]interface{}{}
-			out[i] = flattenWidget(w, wgt)
-		} else {
-			widgetConfig := widgetCfg.([]interface{})
-			wgt := widgetConfig[i].(map[string]interface{})
-			out[i] = flattenWidget(w, wgt)
+	widgetCfg, _ := d.GetOk("widget")
+	// configuredWidgets := widgetCfg.([]interface{})
+	configuredWidgets := widgetCfg.(*schema.Set).List()
+
+	// configuredWidgets := []map[string]interface{}{}
+
+	// for _, wgtC := range widgetConfig {
+	// 	configuredWidgets = append(configuredWidgets, wgtC.(map[string]interface{}))
+	// }
+
+	// for _, w := range widgetConfig {
+	// 	wgtCfg := w.(map[string]interface{})
+
+	// 	// widgetID, _ := wgtCfg["widget_id"].(int)
+
+	// 	// wgt := findWidget(widgetID, *widgetsIn)
+
+	// 	// log.Print("\n\n **************************** \n")
+	// 	// log.Printf("\n flattenWidgets - widgetID:  %+v \n", widgetID)
+	// 	// log.Printf("\n flattenWidgets - w.ID:      %+v \n", wgt.ID)
+	// 	// log.Print("\n **************************** \n\n")
+	// 	// time.Sleep(4 * time.Second)
+
+	// 	wgt := w.(map[string]interface{})
+	// 	out = append(out, flattenWidget(*wgt, wgtCfg))
+
+	// 	// out = append(out, flattenWidget(*wgt, wgtCfg))
+	// 	// out = append(out, flattenWidget(*wgt, wgtCfg))
+
+	// 	// if !ok {
+	// 	// 	// If not widgets are configured, we need
+	// 	// 	// to provide an empty map to populate
+	// 	// 	// using the incoming API response widget data.
+	// 	// 	wgt := map[string]interface{}{}
+	// 	// 	out[i] = flattenWidget(w, wgt)
+	// 	// } else {
+
+	// 	// }
+	// }
+
+	for _, w := range *widgetsIn {
+		// if !ok {
+		// 	// If not widgets are configured, we need
+		// 	// to provide an empty map to populate
+		// 	// using the incoming API response widget data.
+		// 	wgt := map[string]interface{}{}
+		// 	out[i] = flattenWidget(w, wgt)
+		// } else {
+		//   widgetConfig := widgetCfg.([]interface{})
+
+		wgt, widgetIndex := findConfiguredWidget(w.ID, configuredWidgets)
+		if wgt != nil {
+			wKey := fmt.Sprintf("widget.%d", widgetIndex)
+
+			d.Set(wKey, nil)
+
+			log.Printf("\n WIDGET INDEX KEY:   %+v \n", wKey)
+			time.Sleep(2 * time.Second)
+
+			d.Set(wKey, flattenWidget(w, *wgt))
+			// 	out = append(out, flattenWidget(w, *wgt))
 		}
 	}
 
@@ -398,6 +525,10 @@ func flattenWidget(w dashboards.DashboardWidget, widgetCfg map[string]interface{
 	m := make(map[string]interface{})
 	wgtConfigAcctID := getConfiguredWidgetAcctID(widgetCfg)
 
+	log.Print("\n\n **************************** \n")
+	log.Printf("\n flattenWidget - widgetIn ID:   %+v \n", w.ID)
+	log.Printf("\n flattenWidget - widgetCfg ID:  %+v \n\n", widgetCfg["widget_id"])
+
 	if wgtConfigAcctID > 0 && w.AccountID != 0 {
 		m["account_id"] = w.AccountID
 	} else {
@@ -406,6 +537,8 @@ func flattenWidget(w dashboards.DashboardWidget, widgetCfg map[string]interface{
 
 	if w.ID != 0 {
 		m["widget_id"] = w.ID
+	} else {
+		m["widget_id"] = widgetCfg["widget_id"]
 	}
 
 	// Cross-account widgets will have a visualization
@@ -482,6 +615,9 @@ func flattenWidget(w dashboards.DashboardWidget, widgetCfg map[string]interface{
 	if w.Data != nil && len(w.Data) > 0 {
 		data := w.Data[0]
 
+		log.Printf("\n flattenWidget - widgetIn data:               %+v \n", toJSON(w.Data))
+		log.Printf("\n flattenWidget - widgetCfg raw_metric_name:   %+v \n", widgetCfg["raw_metric_name"].(string))
+
 		if data.NRQL != "" {
 			m["nrql"] = data.NRQL
 		}
@@ -498,7 +634,7 @@ func flattenWidget(w dashboards.DashboardWidget, widgetCfg map[string]interface{
 			m["end_time"] = data.EndTime
 		}
 
-		if data.RawMetricName != "" {
+		if data.RawMetricName != "" && widgetCfg["raw_metric_name"] != "" {
 			m["raw_metric_name"] = data.RawMetricName
 		}
 
@@ -550,6 +686,11 @@ func flattenWidget(w dashboards.DashboardWidget, widgetCfg map[string]interface{
 			}
 		}
 	}
+
+	log.Printf("\n flattenWidget - DONE:     %+v \n", toJSON(m))
+
+	log.Print("\n **************************** \n\n")
+	time.Sleep(4 * time.Second)
 
 	return m
 }
